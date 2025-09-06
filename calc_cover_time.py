@@ -14,7 +14,7 @@ true_target = np.array([0, 200, 5])  #此为质心，高为10，半径为7
 true_target_R = 7
 true_target_H = 10
 smoke_R = 10
-t_list = np.arange(0, 60, 0.002)
+t_list = np.arange(0, 65, 0.004)
 true_target_corner_1 = true_target - np.array([0, true_target_R, true_target_H / 2])
 true_target_corner_2 = true_target - np.array([0, true_target_R, -true_target_H / 2])
 true_target_corner_3 = true_target - np.array([0, -true_target_R, true_target_H / 2])
@@ -292,3 +292,66 @@ def get_missile_cover_time_multi_corners(smoke_centers, missile_traj, true_targe
             print(f'    {start:.2f}s ~ {end:.2f}s')
         print(f'总遮挡时间: {total_cover_time:.2f}s')
     return total_cover_time
+
+
+
+def get_missile_cover_time_multi_bomb_and_missile(smoke_centers, missile_trajs, true_target, smoke_radius, t_list, debug=False):
+    """
+    smoke_centers: (3, len(t_list), N) 多个烟雾球心轨迹（N为弹数）
+    missile_trajs: list of 3 np.ndarray，每个为(3, len(t_list))，三个导弹轨迹
+    true_target: np.array([x, y, z]) 目标点
+    smoke_radius: float, 烟雾半径
+    t_list: np.array, 时间序列
+    返回: 所有导弹被遮蔽时间的总和（float），debug时输出每次投弹对每个导弹的遮蔽区间
+    """
+    T = len(t_list)
+    N = smoke_centers.shape[2]
+    M = len(missile_trajs)
+    # 每个导弹的遮蔽情况
+    covered_all_missiles = np.zeros((M, T), dtype=bool)
+    covered_each = np.zeros((M, T, N), dtype=bool)
+
+    for m in range(M):
+        A = missile_trajs[m].T
+        B = np.broadcast_to(true_target, A.shape)
+        AB = B - A
+        for i in range(N):
+            P = smoke_centers[:, :, i].T  # shape (T, 3)
+            AP = P - A
+            cross = np.cross(AP, AB)
+            dist = np.linalg.norm(cross, axis=1) / np.linalg.norm(AB, axis=1)
+            t_proj = np.sum(AP * AB, axis=1) / np.sum(AB * AB, axis=1)
+            on_segment = (t_proj >= 0) & (t_proj <= 1)
+            covered_each[m, :, i] = (dist < smoke_radius) & on_segment
+        # 只要任意一个烟雾球遮挡就算遮挡
+        covered_all_missiles[m] = np.any(covered_each[m], axis=1)
+
+    # 计算每个导弹被遮蔽的时间
+    missile_cover_times = []
+    for m in range(M):
+        cover_time = np.sum(covered_all_missiles[m]) * (t_list[1] - t_list[0])
+        missile_cover_times.append(cover_time)
+
+    total_cover_time = sum(missile_cover_times)
+
+    if debug:
+        for m in range(M):
+            print(f"导弹{m+1}遮蔽情况：")
+            for i in range(N):
+                single_cover_time = np.sum(covered_each[m, :, i]) * (t_list[1] - t_list[0])
+                print(f"  第{i+1}个烟雾球遮蔽时间: {single_cover_time:.2f}s", end=" 区间：")
+                intervals_i = get_cover_intervals(covered_each[m, :, i], t_list)
+                for start, end in intervals_i:
+                    print(f"    {start:.2f}s ~ {end:.2f}s")
+            intervals_m = get_cover_intervals(covered_all_missiles[m], t_list)
+            print(f"导弹{m+1}总遮蔽区间：")
+            for start, end in intervals_m:
+                print(f"    {start:.2f}s ~ {end:.2f}s")
+            print(f"导弹{m+1}总遮蔽时间: {missile_cover_times[m]:.2f}s")
+        print(f'所有导弹被遮蔽时间总和: {total_cover_time:.2f}s')
+    return total_cover_time
+
+
+
+
+# 可视化部分
