@@ -22,6 +22,22 @@ true_target_corner_4 = true_target - np.array([0, -true_target_R, -true_target_H
 smoke_duration = 20  # 烟雾存续时间
 true_target_corners = [true_target_corner_1, true_target_corner_2, true_target_corner_3, true_target_corner_4]
 
+
+missile_starts = [
+    np.array([20000, 0, 2000]),
+    np.array([19000, 600, 2100]),
+    np.array([18000, -600, 1900])
+]
+
+drone_pos = {
+    0: np.array([17800,0,1800]),
+    1: np.array([12000,1400,1400]),
+    2: np.array([6000,-3000,700]),
+    3: np.array([11000,2000,1800]),
+    4: np.array([13000,-2000,1300])
+}
+
+
 def get_missile_traj(start, target, v, t_list):
     """
     start: np.array([x0, y0, z0]) 导弹初始点
