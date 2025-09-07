@@ -1,0 +1,62 @@
+// 双退火算法流程图
+digraph {
+	nodesep=0.8 rankdir=TB ranksep=1.2
+	node [color=lightgray shape=box style=filled]
+	start [label="开始" fillcolor=lightblue shape=ellipse]
+	end [label="结束" fillcolor=lightblue shape=ellipse]
+	init_params [label="初始化算法参数
+- 初始温度T1, T2
+- 冷却系数α1, α2
+- 迭代次数等" fillcolor=lightgreen]
+	init_solutions [label="生成初始解
+- 解1 (S1)
+- 解2 (S2)" fillcolor=lightgreen]
+	eval_initial [label="评估初始解
+- 计算能量E1, E2" fillcolor=lightyellow]
+	term_cond [label="终止条件满足?" fillcolor=lightpink shape=diamond]
+	neighbor1 [label="生成邻域解S1'" fillcolor=lightyellow]
+	eval1 [label="评估新解能量E1'" fillcolor=lightyellow]
+	accept1 [label="接受准则判断
+是否接受S1'?" fillcolor=lightpink shape=diamond]
+	update1 [label="更新解S1 = S1'" fillcolor=lightyellow]
+	cool1 [label="冷却温度
+T1 = α1*T1" fillcolor=lightyellow]
+	neighbor2 [label="生成邻域解S2'" fillcolor=lightyellow]
+	eval2 [label="评估新解能量E2'" fillcolor=lightyellow]
+	accept2 [label="接受准则判断
+是否接受S2'?" fillcolor=lightpink shape=diamond]
+	update2 [label="更新解S2 = S2'" fillcolor=lightyellow]
+	cool2 [label="冷却温度
+T2 = α2*T2" fillcolor=lightyellow]
+	exchange [label="信息交换
+- 比较S1和S2
+- 共享优质解信息" fillcolor=lightgreen]
+	adapt [label="自适应调整
+- 根据交换结果
+- 调整参数或搜索策略" fillcolor=lightgreen]
+	output [label="输出最优解
+- 从S1和S2中选择
+- 最优解及能量值" fillcolor=lightgreen]
+	start -> init_params
+	init_params -> init_solutions
+	init_solutions -> eval_initial
+	eval_initial -> term_cond
+	term_cond -> end [label="是"]
+	term_cond -> neighbor1 [label="否"]
+	neighbor1 -> eval1
+	eval1 -> accept1
+	accept1 -> update1 [label="是"]
+	accept1 -> cool1 [label="否"]
+	update1 -> cool1
+	cool1 -> neighbor2
+	neighbor2 -> eval2
+	eval2 -> accept2
+	accept2 -> update2 [label="是"]
+	accept2 -> cool2 [label="否"]
+	update2 -> cool2
+	cool2 -> exchange
+	exchange -> adapt
+	adapt -> term_cond
+	term_cond -> output [label="是"]
+	output -> end
+}

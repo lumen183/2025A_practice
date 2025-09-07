@@ -5,7 +5,7 @@ plt.rcParams['axes.unicode_minus'] = False
 import numpy as np
 M1 = np.array([20000, 0, 2000])
 f1 = np.array([17800, 0, 1800])
-v_f1 = 120
+
 v_M1 = 300
 v_smoke = -3
 g = 9.80655
@@ -14,7 +14,7 @@ true_target = np.array([0, 200, 5])  #此为质心，高为10，半径为7
 true_target_R = 7
 true_target_H = 10
 smoke_R = 10
-t_list = np.arange(0, 65, 0.004)
+t_list = np.arange(0, 50, 0.001)
 true_target_corner_1 = true_target - np.array([0, true_target_R, true_target_H / 2])
 true_target_corner_2 = true_target - np.array([0, true_target_R, -true_target_H / 2])
 true_target_corner_3 = true_target - np.array([0, -true_target_R, true_target_H / 2])
@@ -22,6 +22,13 @@ true_target_corner_4 = true_target - np.array([0, -true_target_R, -true_target_H
 smoke_duration = 20  # 烟雾存续时间
 true_target_corners = [true_target_corner_1, true_target_corner_2, true_target_corner_3, true_target_corner_4]
 
+bounds_range = [
+    [(130,140),  (np.pi/2,np.pi*3/2),  (0,13.87), (1,13.87), (2, 13.87),     (0,18.97),(0,18.97),(0,18.97),   ],#第一架飞机的参数限制
+    [(70,140),   (np.pi, np.pi*2),     (0, 50),   (1,50),    (2,50),         (0,16.74),(0, 16.74),(0, 16.74), ],  #第二架飞机的参数限制
+    [(70,140),   (0,np.pi),            (0,60),    (1,60),    (2,60),         (0, 11.9),(0, 11.9),(0, 11.9),   ],#第三架飞机的参数限制
+    [(70,140),   (np.pi, np.pi*2),     (0, 56),   (0, 56),   (0, 56),        (0, 18.97),(0, 18.97),(0, 18.97),],   #第四架飞机的参数限制
+    [(70,140),   (0, np.pi),           (0, 43.7), (1, 43.7), (2, 43.7),      (0,16.12),(0,16.12),(0,16.12),   ],#第五架飞机的参数限制
+]
 
 missile_starts = [
     np.array([20000, 0, 2000]),
@@ -37,7 +44,6 @@ drone_pos = {
     4: np.array([13000,-2000,1300])
 }
 
-
 def get_missile_traj(start, target, v, t_list):
     """
     start: np.array([x0, y0, z0]) 导弹初始点
@@ -49,6 +55,9 @@ def get_missile_traj(start, target, v, t_list):
     direction = (target - start) / np.linalg.norm(target - start)
     traj = start[:, np.newaxis] + v * t_list * direction[:, np.newaxis]
     return traj
+
+missile_trajs = np.array([get_missile_traj(missile_starts[i], fake_target, v_M1, t_list) for i in range(3)])
+
 
 def get_smoke_center(position, direction_angle, speed, throw_time, burst_delay, t_list):
     """
@@ -111,6 +120,27 @@ def get_smoke_center_multi(position, direction_angle, speed, throw_times, burst_
 
     return smoke_centers
 
+def get_smoke_throw_and_burst_point(position, direction_angle, speed, throw_time, burst_delay):
+    """
+    输入：
+        position: np.array([x, y, z]) 无人机初始坐标
+        direction_angle: float, 水平飞行方向（0~2pi，弧度）
+        speed: float, 无人机飞行速度
+        throw_time: float, 投弹时间
+        burst_delay: float, 投弹后干扰弹再爆炸的时间
+    返回：
+        throw_point: np.array([x, y, z]) 投弹点
+        burst_point: np.array([x, y, z]) 爆炸点
+    """
+    g = 9.80655  # 重力加速度
+    direction = np.array([np.cos(direction_angle), np.sin(direction_angle), 0.0])
+    # 投弹点：无人机在投弹时刻的位置
+    throw_point = position + direction * speed * throw_time
+    # 爆炸点：投弹点基础上，干扰弹在空中飞行 burst_delay 后的位置（只考虑重力影响）
+    burst_point = throw_point - 0.5 * np.array([0, 0, g]) * burst_delay ** 2
+    return throw_point, burst_point
+
+
 
 def get_cover_intervals(covered, t_list):
     """
@@ -133,11 +163,6 @@ def get_cover_intervals(covered, t_list):
 
     intervals = [(t_list[s], t_list[e-1]) for s, e in zip(starts, ends)]
     return intervals
-
-
-
-
-
 
 
 
@@ -197,7 +222,6 @@ def get_missile_cover_time_corners(smoke_center, missile_traj, true_target_corne
         on_segment = (t_proj >= 0) & (t_proj <= 1)
         dist = np.linalg.norm(cross, axis=1) / np.linalg.norm(AB, axis=1)
         covered = (dist < smoke_radius) & on_segment
-        covered = dist < smoke_radius
         covered_all &= covered  # 只有所有角都被遮挡才算遮挡
 
 
@@ -369,5 +393,45 @@ def get_missile_cover_time_multi_bomb_and_missile(smoke_centers, missile_trajs, 
 
 
 
+def get_missile_cover_bool_multi_corners(smoke_centers, missile_trajs, true_target_corners, smoke_radius, t_list, debug=False):
+    """
+    smoke_centers: (3, len(t_list), 3)  # 一个无人机放出的三个烟雾球
+    missile_trajs: list of 3 np.ndarray，每个为(3, len(t_list))，三个导弹轨迹
+    true_target_corners: list of 4 np.array([x, y, z]) 目标四个角点
+    smoke_radius: float
+    t_list: np.array
+    返回: covered_all_missiles (3, len(t_list))，每个导弹每个时刻是否被遮蔽
+    """
+    T = len(t_list)
+    N = smoke_centers.shape[2]
+    M = len(missile_trajs)
+    covered_all_missiles = np.zeros((M, T), dtype=bool)
+    covered_each = np.ones((M, T, N), dtype=bool)
 
-# 可视化部分
+    for m in range(M):
+        A = missile_trajs[m].T  # (T, 3)
+        for i in range(N):
+            P = smoke_centers[:, :, i].T  # (T, 3)
+            covered_corners = np.ones(T, dtype=bool)
+            for corner in true_target_corners:
+                B = np.broadcast_to(corner, A.shape)
+                AB = B - A
+                AP = P - A
+                cross = np.cross(AP, AB)
+                t_proj = np.sum(AP * AB, axis=1) / np.sum(AB * AB, axis=1)
+                on_segment = (t_proj >= 0) & (t_proj <= 1)
+                dist = np.linalg.norm(cross, axis=1) / np.linalg.norm(AB, axis=1)
+                covered = (dist < smoke_radius) & on_segment
+                covered_corners &= covered  # 所有角都被遮挡才算
+            covered_each[m, :, i] = covered_corners
+        # 只要任意一个烟雾球遮挡所有角就算遮挡
+        covered_all_missiles[m] = np.any(covered_each[m], axis=1)
+
+    if debug:
+        for m in range(M):
+            print(f"导弹{m+1}遮蔽区间：")
+            intervals = get_cover_intervals(covered_all_missiles[m], t_list)
+            for start, end in intervals:
+                print(f"    {start:.2f}s ~ {end:.2f}s")
+            print(f"导弹{m+1}总遮蔽时间: {np.sum(covered_all_missiles[m]) * (t_list[1] - t_list[0]):.2f}s")
+    return covered_all_missiles  # shape (3, len(t_list))
